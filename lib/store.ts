@@ -1,5 +1,5 @@
-import { randomUUID } from "crypto";
-import { mkdir, readFile, writeFile } from "fs/promises";
+import { createHash } from "crypto";
+import { cp, mkdir, readFile, rm, stat, writeFile } from "fs/promises";
 import path from "path";
 import type { CertType } from "./certTypes";
 import { DEFAULT_CERT_TYPES } from "./certTypes";
@@ -62,12 +62,59 @@ function dataDir(): string {
 const DATA_DIR = dataDir();
 const STORE_PATH = path.join(DATA_DIR, "store.json");
 
+/** Shipped with the repo for Vercel: copy into /tmp on first cold start (see `seed/` folder). */
+const SEED_DIR = path.join(process.cwd(), "seed");
+const SEED_STORE_PATH = path.join(SEED_DIR, "store.json");
+const SEED_UPLOADS_DIR = path.join(SEED_DIR, "uploads");
+
+/**
+ * When hosted on Vercel, the live store is under `/tmp` and starts empty.
+ * If you commit `seed/store.json` (and optionally `seed/uploads/`), we hydrate `/tmp` once per instance.
+ */
+async function bootstrapFromSeedIfNeeded(): Promise<void> {
+  if (!process.env.VERCEL) return;
+  try {
+    await readFile(STORE_PATH, "utf-8");
+    return;
+  } catch {
+    /* no runtime store yet */
+  }
+  let raw: string;
+  try {
+    raw = await readFile(SEED_STORE_PATH, "utf-8");
+  } catch {
+    return;
+  }
+  await mkdir(DATA_DIR, { recursive: true });
+  await writeFile(STORE_PATH, raw, "utf-8");
+  try {
+    const st = await stat(SEED_UPLOADS_DIR);
+    if (!st.isDirectory()) return;
+    await rm(uploadsRoot(), { recursive: true, force: true });
+    await cp(SEED_UPLOADS_DIR, uploadsRoot(), { recursive: true });
+  } catch {
+    await mkdir(uploadsRoot(), { recursive: true });
+  }
+}
+
+/**
+ * Env-seeded admin must use a stable id: each Vercel invocation has its own `/tmp`
+ * store, and the session cookie stores this id — randomUUID() per instance would
+ * make the next API request fail `requireViewerAccount` and bounce to login.
+ */
+function stableSeededOfficeAccountId(login: string): string {
+  const h = createHash("sha256")
+    .update(`crewdoc:office-account:v1:${login.toLowerCase()}`)
+    .digest("hex");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
+}
+
 function seedOfficeAdminIfEmpty(store: DataStore): boolean {
   if (store.officeAccounts.length > 0) return false;
   const login = (process.env.OFFICE_ADMIN_LOGIN ?? "admin").trim().toLowerCase();
   const password = process.env.OFFICE_ADMIN_PASSWORD ?? "changeme";
   store.officeAccounts.push({
-    id: randomUUID(),
+    id: stableSeededOfficeAccountId(login),
     login,
     passwordHash: hashPassword(password),
     role: "admin",
@@ -132,6 +179,8 @@ export function migrateLegacyMarinerVesselFields(store: DataStore): boolean {
 }
 
 export async function readStore(): Promise<DataStore> {
+  await mkdir(DATA_DIR, { recursive: true });
+  await bootstrapFromSeedIfNeeded();
   await ensureDataDir();
   try {
     const raw = await readFile(STORE_PATH, "utf-8");
