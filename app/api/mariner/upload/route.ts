@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
+import { BlobStoreNotFoundError } from "@vercel/blob";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { deleteBlobUrl, isBlobFilesEnabled, putMarinerUpload } from "@/lib/blobFiles";
@@ -163,9 +164,18 @@ export async function POST(req: Request) {
     await writeStore(store);
   } catch (err) {
     if (blobUrl) await deleteBlobUrl(blobUrl);
+    console.error("[mariner/upload]", err);
+    if (err instanceof BlobStoreNotFoundError) {
+      return NextResponse.json(
+        {
+          error:
+            "Blob token points at a store that was deleted. Open Vercel → your new Blob store → connect it to this project (updates BLOB_READ_WRITE_TOKEN) or paste the new token in Settings → Environment Variables, then redeploy.",
+        },
+        { status: 502 },
+      );
+    }
     const message =
       err instanceof Error ? err.message : "Upload could not be completed.";
-    console.error("[mariner/upload]", err);
     return NextResponse.json(
       {
         error:
