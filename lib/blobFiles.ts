@@ -16,6 +16,7 @@ export async function putMarinerUpload(
     token: process.env.BLOB_READ_WRITE_TOKEN,
     contentType: mimeType || "application/octet-stream",
     addRandomSuffix: false,
+    allowOverwrite: true,
   });
   return { blobUrl: blob.url, relativePath: pathname };
 }

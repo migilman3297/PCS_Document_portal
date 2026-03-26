@@ -3,20 +3,18 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { isBlobFilesEnabled, putMarinerUpload } from "@/lib/blobFiles";
+import { deleteBlobUrl, isBlobFilesEnabled, putMarinerUpload } from "@/lib/blobFiles";
 import { certTypeByKeyFromList } from "@/lib/certTypes";
 import { parseIsoDateOnly } from "@/lib/dateOnly";
 import { MARINER_COOKIE, readMarinerUserId } from "@/lib/session";
 import { ensureCertTemplates, readStore, uploadsRoot, writeStore } from "@/lib/store";
+import {
+  allowedUploadMimeErrorMessage,
+  resolveAllowedUploadMime,
+} from "@/lib/uploadMime";
 
-const ALLOWED_MIME = new Set([
-  "application/pdf",
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-]);
-
-const MAX_BYTES = 12 * 1024 * 1024; // 12 MB per file — tune for pitch
+/** Vercel serverless request bodies are capped (~4.5 MB hobby); stay under that. */
+const MAX_BYTES = 4 * 1024 * 1024;
 
 export async function POST(req: Request) {
   const jar = await cookies();
@@ -34,7 +32,13 @@ export async function POST(req: Request) {
   try {
     formData = await req.formData();
   } catch {
-    return NextResponse.json({ error: "Invalid form data" }, { status: 400 });
+    return NextResponse.json(
+      {
+        error:
+          "The upload could not be read. On Vercel, request bodies are limited to about 4.5 MB—try a smaller PDF or image.",
+      },
+      { status: 400 },
+    );
   }
   const certKey = String(formData.get("certKey") ?? "");
   const file = formData.get("file");
@@ -111,46 +115,67 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
-  const mimeType = file.type || "application/octet-stream";
-  if (!ALLOWED_MIME.has(mimeType)) {
-    return NextResponse.json(
-      { error: "Only PDF and images (JPEG, PNG, WebP) are allowed." },
-      { status: 400 }
-    );
+  const { mimeType, ok: mimeOk } = resolveAllowedUploadMime(file);
+  if (!mimeOk) {
+    return NextResponse.json({ error: allowedUploadMimeErrorMessage() }, { status: 400 });
   }
 
   const docId = randomUUID();
   const safeBase = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 80);
   const storedFileName = `${docId}_${safeBase || "upload"}`;
-  const buf = Buffer.from(await file.arrayBuffer());
+  let buf: Buffer;
+  try {
+    buf = Buffer.from(await file.arrayBuffer());
+  } catch {
+    return NextResponse.json(
+      { error: "Could not read the uploaded file. Try a smaller file or a different browser." },
+      { status: 400 },
+    );
+  }
   let relativePath: string;
   let blobUrl: string | undefined;
-  if (isBlobFilesEnabled()) {
-    const put = await putMarinerUpload(userId, storedFileName, buf, mimeType);
-    relativePath = put.relativePath;
-    blobUrl = put.blobUrl;
-  } else {
-    const userDir = path.join(uploadsRoot(), userId);
-    await mkdir(userDir, { recursive: true });
-    const fullPath = path.join(userDir, storedFileName);
-    await writeFile(fullPath, buf);
-    relativePath = path.join(userId, storedFileName).replace(/\\/g, "/");
-  }
+  try {
+    if (isBlobFilesEnabled()) {
+      const put = await putMarinerUpload(userId, storedFileName, buf, mimeType);
+      relativePath = put.relativePath;
+      blobUrl = put.blobUrl;
+    } else {
+      const userDir = path.join(uploadsRoot(), userId);
+      await mkdir(userDir, { recursive: true });
+      const fullPath = path.join(userDir, storedFileName);
+      await writeFile(fullPath, buf);
+      relativePath = path.join(userId, storedFileName).replace(/\\/g, "/");
+    }
 
-  store.documents.push({
-    id: docId,
-    userId,
-    certKey,
-    relativePath,
-    ...(blobUrl ? { blobUrl } : {}),
-    originalName: file.name,
-    mimeType,
-    uploadedAt: new Date().toISOString(),
-    expiresAt,
-    certificateIssuedDate,
-    customTitle,
-  });
-  await writeStore(store);
+    store.documents.push({
+      id: docId,
+      userId,
+      certKey,
+      relativePath,
+      ...(blobUrl ? { blobUrl } : {}),
+      originalName: file.name,
+      mimeType,
+      uploadedAt: new Date().toISOString(),
+      expiresAt,
+      certificateIssuedDate,
+      customTitle,
+    });
+    await writeStore(store);
+  } catch (err) {
+    if (blobUrl) await deleteBlobUrl(blobUrl);
+    const message =
+      err instanceof Error ? err.message : "Upload could not be completed.";
+    console.error("[mariner/upload]", err);
+    return NextResponse.json(
+      {
+        error:
+          message.length > 0 && message.length < 200
+            ? message
+            : "Upload failed (storage). Check Vercel Blob token and logs.",
+      },
+      { status: 502 },
+    );
+  }
 
   return NextResponse.json({
     document: store.documents[store.documents.length - 1],
