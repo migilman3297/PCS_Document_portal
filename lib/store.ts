@@ -53,11 +53,31 @@ export type DataStore = {
   assignmentBillets?: string[];
 };
 
-const DATA_DIR = path.join(process.cwd(), "data");
+/** Vercel serverless is read-only except `/tmp`; local file store must live there. */
+function dataDir(): string {
+  if (process.env.VERCEL) return path.join("/tmp", "crewdoc-data");
+  return path.join(process.cwd(), "data");
+}
+
+const DATA_DIR = dataDir();
 const STORE_PATH = path.join(DATA_DIR, "store.json");
 
+function seedOfficeAdminIfEmpty(store: DataStore): boolean {
+  if (store.officeAccounts.length > 0) return false;
+  const login = (process.env.OFFICE_ADMIN_LOGIN ?? "admin").trim().toLowerCase();
+  const password = process.env.OFFICE_ADMIN_PASSWORD ?? "changeme";
+  store.officeAccounts.push({
+    id: randomUUID(),
+    login,
+    passwordHash: hashPassword(password),
+    role: "admin",
+    allowedShips: [],
+  });
+  return true;
+}
+
 export function uploadsRoot(): string {
-  return path.join(DATA_DIR, "uploads");
+  return path.join(dataDir(), "uploads");
 }
 
 async function ensureDataDir(): Promise<void> {
@@ -120,21 +140,7 @@ export async function readStore(): Promise<DataStore> {
     if (!parsed.documents) parsed.documents = [];
     if (!Array.isArray(parsed.officeAccounts)) parsed.officeAccounts = [];
 
-    let mutated = false;
-    if (parsed.officeAccounts.length === 0) {
-      const login = (process.env.OFFICE_ADMIN_LOGIN ?? "admin")
-        .trim()
-        .toLowerCase();
-      const password = process.env.OFFICE_ADMIN_PASSWORD ?? "changeme";
-      parsed.officeAccounts.push({
-        id: randomUUID(),
-        login,
-        passwordHash: hashPassword(password),
-        role: "admin",
-        allowedShips: [],
-      });
-      mutated = true;
-    }
+    let mutated = seedOfficeAdminIfEmpty(parsed);
     const seededCerts = ensureCertTemplates(parsed);
     if (seededCerts) mutated = true;
     if (migrateLegacyMarinerVesselFields(parsed)) mutated = true;
@@ -145,8 +151,17 @@ export async function readStore(): Promise<DataStore> {
     return parsed;
   } catch {
     const parsed = emptyStore();
-    ensureCertTemplates(parsed);
-    ensureAssignmentLists(parsed);
+    let mutated = false;
+    if (ensureCertTemplates(parsed)) mutated = true;
+    if (ensureAssignmentLists(parsed)) mutated = true;
+    if (seedOfficeAdminIfEmpty(parsed)) mutated = true;
+    if (mutated) {
+      try {
+        await writeFile(STORE_PATH, JSON.stringify(parsed, null, 2), "utf-8");
+      } catch {
+        /* e.g. read-only FS without VERCEL /tmp — return in-memory store for this request */
+      }
+    }
     return parsed;
   }
 }
