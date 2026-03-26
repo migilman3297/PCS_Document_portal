@@ -1,12 +1,11 @@
-import path from "path";
-import { unlink } from "fs/promises";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { addCalendarYears } from "@/lib/certExpiry";
 import { certTypeByKeyFromList } from "@/lib/certTypes";
 import { parseIsoDateOnly } from "@/lib/dateOnly";
+import { deleteDocumentFile } from "@/lib/documentFiles";
 import { MARINER_COOKIE, readMarinerUserId } from "@/lib/session";
-import { ensureCertTemplates, readStore, uploadsRoot, writeStore } from "@/lib/store";
+import { ensureCertTemplates, readStore, writeStore } from "@/lib/store";
 
 type Params = { docId: string };
 
@@ -41,12 +40,7 @@ export async function DELETE(
   const r = await getOwnedDoc(docId);
   if (!r.ok) return r.response;
 
-  const fullPath = path.join(uploadsRoot(), r.doc.relativePath);
-  try {
-    await unlink(fullPath);
-  } catch {
-    /* file missing */
-  }
+  await deleteDocumentFile(r.doc);
 
   r.store.documents = r.store.documents.filter((d) => d.id !== docId);
   await writeStore(r.store);

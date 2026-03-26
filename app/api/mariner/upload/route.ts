@@ -3,6 +3,7 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { isBlobFilesEnabled, putMarinerUpload } from "@/lib/blobFiles";
 import { certTypeByKeyFromList } from "@/lib/certTypes";
 import { parseIsoDateOnly } from "@/lib/dateOnly";
 import { MARINER_COOKIE, readMarinerUserId } from "@/lib/session";
@@ -121,18 +122,27 @@ export async function POST(req: Request) {
   const docId = randomUUID();
   const safeBase = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 80);
   const storedFileName = `${docId}_${safeBase || "upload"}`;
-  const userDir = path.join(uploadsRoot(), userId);
-  await mkdir(userDir, { recursive: true });
-  const fullPath = path.join(userDir, storedFileName);
   const buf = Buffer.from(await file.arrayBuffer());
-  await writeFile(fullPath, buf);
+  let relativePath: string;
+  let blobUrl: string | undefined;
+  if (isBlobFilesEnabled()) {
+    const put = await putMarinerUpload(userId, storedFileName, buf, mimeType);
+    relativePath = put.relativePath;
+    blobUrl = put.blobUrl;
+  } else {
+    const userDir = path.join(uploadsRoot(), userId);
+    await mkdir(userDir, { recursive: true });
+    const fullPath = path.join(userDir, storedFileName);
+    await writeFile(fullPath, buf);
+    relativePath = path.join(userId, storedFileName).replace(/\\/g, "/");
+  }
 
-  const relativePath = path.join(userId, storedFileName).replace(/\\/g, "/");
   store.documents.push({
     id: docId,
     userId,
     certKey,
     relativePath,
+    ...(blobUrl ? { blobUrl } : {}),
     originalName: file.name,
     mimeType,
     uploadedAt: new Date().toISOString(),

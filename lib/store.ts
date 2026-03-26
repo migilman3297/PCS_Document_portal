@@ -4,6 +4,12 @@ import path from "path";
 import type { CertType } from "./certTypes";
 import { DEFAULT_CERT_TYPES } from "./certTypes";
 import { hashPassword } from "./password";
+import {
+  ensureCrewdocTable,
+  isPostgresStoreEnabled,
+  loadStoreFromPostgres,
+  saveStoreToPostgres,
+} from "./postgresStore";
 import { ensureAssignmentLists } from "./viewerAssignment";
 
 export type OfficeAccountRole = "admin" | "coordinator";
@@ -31,6 +37,8 @@ export type StoredDocument = {
   userId: string;
   certKey: string;
   relativePath: string;
+  /** Set when using Vercel Blob (`BLOB_READ_WRITE_TOKEN`); file bytes are not on disk. */
+  blobUrl?: string | null;
   originalName: string;
   mimeType: string;
   uploadedAt: string;
@@ -138,6 +146,31 @@ const emptyStore = (): DataStore => ({
   officeAccounts: [],
 });
 
+function normalizeDataStore(parsed: DataStore): DataStore {
+  if (!parsed.users) parsed.users = [];
+  if (!parsed.documents) parsed.documents = [];
+  if (!Array.isArray(parsed.officeAccounts)) parsed.officeAccounts = [];
+  return parsed;
+}
+
+async function readSeedStoreFromDisk(): Promise<DataStore | null> {
+  try {
+    const raw = await readFile(SEED_STORE_PATH, "utf-8");
+    return normalizeDataStore(JSON.parse(raw) as DataStore);
+  } catch {
+    return null;
+  }
+}
+
+async function applyStoreMigrations(parsed: DataStore): Promise<boolean> {
+  let mutated = false;
+  if (seedOfficeAdminIfEmpty(parsed)) mutated = true;
+  if (ensureCertTemplates(parsed)) mutated = true;
+  if (migrateLegacyMarinerVesselFields(parsed)) mutated = true;
+  if (ensureAssignmentLists(parsed)) mutated = true;
+  return mutated;
+}
+
 /** Ensures `certTemplates` exists; returns true if the store was mutated. */
 export function ensureCertTemplates(store: DataStore): boolean {
   if (!Array.isArray(store.certTemplates) || store.certTemplates.length === 0) {
@@ -179,31 +212,36 @@ export function migrateLegacyMarinerVesselFields(store: DataStore): boolean {
 }
 
 export async function readStore(): Promise<DataStore> {
+  if (isPostgresStoreEnabled()) {
+    await ensureCrewdocTable();
+    const fromDb = await loadStoreFromPostgres();
+    if (fromDb) {
+      const parsed = normalizeDataStore(fromDb);
+      const mutated = await applyStoreMigrations(parsed);
+      if (mutated) await saveStoreToPostgres(parsed);
+      return parsed;
+    }
+    const seeded = (await readSeedStoreFromDisk()) ?? emptyStore();
+    normalizeDataStore(seeded);
+    await applyStoreMigrations(seeded);
+    await saveStoreToPostgres(seeded);
+    return seeded;
+  }
+
   await mkdir(DATA_DIR, { recursive: true });
   await bootstrapFromSeedIfNeeded();
   await ensureDataDir();
   try {
     const raw = await readFile(STORE_PATH, "utf-8");
-    const parsed = JSON.parse(raw) as DataStore;
-    if (!parsed.users) parsed.users = [];
-    if (!parsed.documents) parsed.documents = [];
-    if (!Array.isArray(parsed.officeAccounts)) parsed.officeAccounts = [];
-
-    let mutated = seedOfficeAdminIfEmpty(parsed);
-    const seededCerts = ensureCertTemplates(parsed);
-    if (seededCerts) mutated = true;
-    if (migrateLegacyMarinerVesselFields(parsed)) mutated = true;
-    if (ensureAssignmentLists(parsed)) mutated = true;
+    const parsed = normalizeDataStore(JSON.parse(raw) as DataStore);
+    const mutated = await applyStoreMigrations(parsed);
     if (mutated) {
       await writeFile(STORE_PATH, JSON.stringify(parsed, null, 2), "utf-8");
     }
     return parsed;
   } catch {
     const parsed = emptyStore();
-    let mutated = false;
-    if (ensureCertTemplates(parsed)) mutated = true;
-    if (ensureAssignmentLists(parsed)) mutated = true;
-    if (seedOfficeAdminIfEmpty(parsed)) mutated = true;
+    const mutated = await applyStoreMigrations(parsed);
     if (mutated) {
       try {
         await writeFile(STORE_PATH, JSON.stringify(parsed, null, 2), "utf-8");
@@ -216,6 +254,10 @@ export async function readStore(): Promise<DataStore> {
 }
 
 export async function writeStore(store: DataStore): Promise<void> {
+  if (isPostgresStoreEnabled()) {
+    await saveStoreToPostgres(store);
+    return;
+  }
   await ensureDataDir();
   await writeFile(STORE_PATH, JSON.stringify(store, null, 2), "utf-8");
 }

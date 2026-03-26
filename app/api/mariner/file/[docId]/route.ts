@@ -1,9 +1,8 @@
-import path from "path";
-import { readFile, stat } from "fs/promises";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { readDocumentFileBytes } from "@/lib/documentFiles";
 import { MARINER_COOKIE, readMarinerUserId } from "@/lib/session";
-import { readStore, uploadsRoot } from "@/lib/store";
+import { readStore } from "@/lib/store";
 
 type Params = { docId: string };
 
@@ -22,17 +21,10 @@ export async function GET(
   if (!doc) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  const fullPath = path.join(uploadsRoot(), doc.relativePath);
-  try {
-    const st = await stat(fullPath);
-    if (!st.isFile()) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-  } catch {
+  const body = await readDocumentFileBytes(doc);
+  if (!body) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-
-  const body = await readFile(fullPath);
   const headers = new Headers();
   headers.set("Content-Type", doc.mimeType);
   headers.set(
@@ -40,5 +32,5 @@ export async function GET(
     `inline; filename="${encodeURIComponent(doc.originalName)}"`,
   );
 
-  return new NextResponse(body, { headers });
+  return new NextResponse(new Uint8Array(body), { headers });
 }

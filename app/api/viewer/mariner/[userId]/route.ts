@@ -1,6 +1,5 @@
-import path from "path";
-import { unlink } from "fs/promises";
 import { NextResponse } from "next/server";
+import { deleteDocumentFile } from "@/lib/documentFiles";
 import {
   isAllowedViewerBillet,
   isAllowedViewerShip,
@@ -9,7 +8,7 @@ import {
   officeAccountCanAccessMarinerUserId,
   requireViewerAccount,
 } from "@/lib/viewerAccess";
-import { uploadsRoot, writeStore } from "@/lib/store";
+import { writeStore } from "@/lib/store";
 
 type Params = { userId: string };
 
@@ -85,12 +84,7 @@ export async function DELETE(
   }
   const docsToRemove = auth.store.documents.filter((d) => d.userId === userId);
   for (const d of docsToRemove) {
-    const fullPath = path.join(uploadsRoot(), d.relativePath);
-    try {
-      await unlink(fullPath);
-    } catch {
-      /* file missing */
-    }
+    await deleteDocumentFile(d);
   }
   auth.store.documents = auth.store.documents.filter(
     (d) => d.userId !== userId,
