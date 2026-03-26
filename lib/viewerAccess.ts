@@ -10,8 +10,10 @@ export function marinerVisibleToOfficeAccount(
 ): boolean {
   if (account.role === "admin") return true;
   const ship = mariner.assignedShip?.trim();
-  if (!ship) return false;
-  return account.allowedShips.includes(ship);
+  /** Coordinators need to see crew who have not been assigned a vessel yet. */
+  if (!ship) return true;
+  const shipLow = ship.toLowerCase();
+  return account.allowedShips.some((s) => s.toLowerCase() === shipLow);
 }
 
 export function officeAccountCanAccessMarinerUserId(

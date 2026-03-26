@@ -54,8 +54,12 @@ export async function saveStoreToPostgres(store: DataStore): Promise<void> {
   await ensureCrewdocTable();
   const s = sql();
   const json = JSON.stringify(store);
-  await s`
-    INSERT INTO crewdoc_kv (id, payload) VALUES (1, ${json}::jsonb)
-    ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload
-  `;
+  /** Serialize writers so concurrent serverless calls are less likely to clobber JSON. */
+  await s.transaction([
+    s`SELECT pg_advisory_xact_lock(842001)`,
+    s`
+      INSERT INTO crewdoc_kv (id, payload) VALUES (1, ${json}::jsonb)
+      ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload
+    `,
+  ]);
 }

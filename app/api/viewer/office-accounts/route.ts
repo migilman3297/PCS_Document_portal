@@ -1,6 +1,6 @@
-import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { hashPassword } from "@/lib/password";
+import { stableOfficeAccountId } from "@/lib/stableIds";
 import { normalizeCoordinatorAllowedShips } from "@/lib/viewerAssignment";
 import { requireViewerAccount } from "@/lib/viewerAccess";
 import { writeStore } from "@/lib/store";
@@ -74,7 +74,7 @@ export async function POST(req: Request) {
     );
   }
   const created = {
-    id: randomUUID(),
+    id: stableOfficeAccountId(login),
     login,
     passwordHash: hashPassword(password),
     role: "coordinator" as const,

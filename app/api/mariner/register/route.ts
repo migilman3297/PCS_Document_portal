@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { randomUUID } from "crypto";
 import { hashPassword } from "@/lib/password";
+import { stableMarinerUserId } from "@/lib/stableIds";
 import {
   MARINER_COOKIE,
   createMarinerSessionToken,
@@ -40,7 +40,7 @@ export async function POST(req: Request) {
     );
   }
   const user = {
-    id: randomUUID(),
+    id: stableMarinerUserId(email),
     email,
     name,
     passwordHash: hashPassword(password),

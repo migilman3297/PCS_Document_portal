@@ -1239,22 +1239,28 @@ function CoordinatorShipAccess({
   return (
     <div className="mt-3 space-y-4 border-t border-white/10 pt-3">
       <div className="flex flex-wrap gap-4">
-        {shipOptions.map((ship) => (
-          <label
-            key={ship}
-            className="flex cursor-pointer items-center gap-2 text-sm text-slate-300"
-          >
-            <input
-              type="checkbox"
-              className="rounded border-white/20 bg-[#2a2015]"
-              checked={ships[ship] ?? false}
-              onChange={(e) =>
-                setShips((prev) => ({ ...prev, [ship]: e.target.checked }))
-              }
-            />
-            {ship}
-          </label>
-        ))}
+        {shipOptions.length === 0 ? (
+          <p className="text-xs text-amber-200/80">
+            No vessels defined—add hulls under Vessel &amp; billet dropdowns.
+          </p>
+        ) : (
+          shipOptions.map((ship) => (
+            <label
+              key={ship}
+              className="flex cursor-pointer items-center gap-2 text-sm text-slate-300"
+            >
+              <input
+                type="checkbox"
+                className="rounded border-white/20 bg-[#2a2015]"
+                checked={ships[ship] ?? false}
+                onChange={(e) =>
+                  setShips((prev) => ({ ...prev, [ship]: e.target.checked }))
+                }
+              />
+              {ship}
+            </label>
+          ))
+        )}
       </div>
       <button
         type="button"
@@ -1632,7 +1638,9 @@ function AssignmentOptionsAdminPanel({
           </h2>
           <p className="mt-1 text-sm text-slate-400">
             Changes apply immediately for mariners, coordinator vessel access, and
-            office assignment. Keep at least one entry in each list.
+            office assignment. Keep at least one entry in each list. New vessels
+            appear as checkbox options for coordinators in <strong>Office team
+            access</strong> as soon as you save here.
           </p>
         </div>
       </button>
@@ -1857,25 +1865,36 @@ function OfficeTeamPanel({ shipOptions }: { shipOptions: string[] }) {
             </div>
             <fieldset>
               <legend className="mb-2 text-xs font-medium text-slate-400">
-                Vessels
+                Vessels this coordinator can work with (checkboxes)
               </legend>
+              <p className="mb-2 text-xs text-slate-500">
+                Same names as in <strong>Vessel &amp; billet dropdowns</strong>.
+                Missing a new hull? Save it there first, then check the box here.
+              </p>
               <div className="flex flex-wrap gap-3">
-                {shipOptions.map((ship) => (
-                  <label
-                    key={ship}
-                    className="flex cursor-pointer items-center gap-2 text-sm text-slate-300"
-                  >
-                    <input
-                      type="checkbox"
-                      className="rounded border-white/20 bg-[#2a2015]"
-                      checked={pickShips[ship] ?? false}
-                      onChange={(e) =>
-                        setPickShips((p) => ({ ...p, [ship]: e.target.checked }))
-                      }
-                    />
-                    {ship}
-                  </label>
-                ))}
+                {shipOptions.length === 0 ? (
+                  <span className="text-xs text-amber-200/80">
+                    No vessels in the list yet. Add one in Vessel &amp; billet
+                    dropdowns.
+                  </span>
+                ) : (
+                  shipOptions.map((ship) => (
+                    <label
+                      key={ship}
+                      className="flex cursor-pointer items-center gap-2 text-sm text-slate-300"
+                    >
+                      <input
+                        type="checkbox"
+                        className="rounded border-white/20 bg-[#2a2015]"
+                        checked={pickShips[ship] ?? false}
+                        onChange={(e) =>
+                          setPickShips((p) => ({ ...p, [ship]: e.target.checked }))
+                        }
+                      />
+                      {ship}
+                    </label>
+                  ))
+                )}
               </div>
             </fieldset>
             <button

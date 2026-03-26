@@ -1,4 +1,3 @@
-import { createHash } from "crypto";
 import { cp, mkdir, readFile, rm, stat, writeFile } from "fs/promises";
 import path from "path";
 import type { CertType } from "./certTypes";
@@ -10,6 +9,7 @@ import {
   loadStoreFromPostgres,
   saveStoreToPostgres,
 } from "./postgresStore";
+import { stableOfficeAccountId } from "./stableIds";
 import { ensureAssignmentLists } from "./viewerAssignment";
 
 export type OfficeAccountRole = "admin" | "coordinator";
@@ -105,24 +105,12 @@ async function bootstrapFromSeedIfNeeded(): Promise<void> {
   }
 }
 
-/**
- * Env-seeded admin must use a stable id: each Vercel invocation has its own `/tmp`
- * store, and the session cookie stores this id — randomUUID() per instance would
- * make the next API request fail `requireViewerAccount` and bounce to login.
- */
-function stableSeededOfficeAccountId(login: string): string {
-  const h = createHash("sha256")
-    .update(`crewdoc:office-account:v1:${login.toLowerCase()}`)
-    .digest("hex");
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
-}
-
 function seedOfficeAdminIfEmpty(store: DataStore): boolean {
   if (store.officeAccounts.length > 0) return false;
   const login = (process.env.OFFICE_ADMIN_LOGIN ?? "admin").trim().toLowerCase();
   const password = process.env.OFFICE_ADMIN_PASSWORD ?? "changeme";
   store.officeAccounts.push({
-    id: stableSeededOfficeAccountId(login),
+    id: stableOfficeAccountId(login),
     login,
     passwordHash: hashPassword(password),
     role: "admin",
