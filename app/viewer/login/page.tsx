@@ -37,26 +37,23 @@ export default function ViewerLoginPage() {
   return (
     <div className="flex min-h-full flex-1 flex-col items-center justify-center bg-[#1a1208] px-4 py-16 text-slate-100">
       <div className="w-full max-w-md space-y-8">
-        <div className="space-y-2 text-center">
-          <p className="text-xs font-semibold uppercase tracking-wider text-amber-200/90">
-            Office & vessel
-          </p>
-          <h1 className="text-2xl font-semibold text-white">Office portal</h1>
-          <p className="text-sm text-slate-400">
-            Sign in with your office username and password. The first time the
-            app reads your data store it creates an admin account: default{" "}
-            <code className="rounded bg-white/10 px-1 text-amber-100">admin</code>{" "}
-            /{" "}
-            <code className="rounded bg-white/10 px-1 text-amber-100">
-              changeme
-            </code>
-            , or{" "}
-            <code className="rounded bg-white/10 px-1">OFFICE_ADMIN_LOGIN</code>{" "}
-            and{" "}
-            <code className="rounded bg-white/10 px-1">
-              OFFICE_ADMIN_PASSWORD
-            </code>{" "}
-            in <code className="rounded bg-white/10 px-1">.env.local</code>.
+        <div className="space-y-3 text-center">
+          <h1 className="text-3xl font-semibold leading-tight text-white sm:text-4xl">
+            Office &amp; vessel portal
+          </h1>
+          <p className="text-sm leading-relaxed text-slate-400">
+            Log in to your account to view your crewmember documents.{" "}
+            <span className="text-slate-500">
+              (admin account — User:{" "}
+              <code className="rounded bg-white/10 px-1.5 py-0.5 text-amber-100">
+                ADMIN
+              </code>{" "}
+              Pass:{" "}
+              <code className="rounded bg-white/10 px-1.5 py-0.5 text-amber-100">
+                DEMOCHANGE
+              </code>
+              )
+            </span>
           </p>
         </div>
 

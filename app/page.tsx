@@ -17,13 +17,12 @@ export default function Home() {
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-12 px-6 py-14">
         <div className="max-w-2xl space-y-4">
           <h1 className="text-3xl font-semibold leading-tight text-white sm:text-4xl">
-            Joiner documents, one place
+            PCS Crewmember document portal
           </h1>
           <p className="text-lg leading-relaxed text-slate-400">
-            Company sends a link. The mariner signs in, uploads certificates from
-            a checklist, and keeps history for the next contract. Office and ship
-            open the same scans with a shared password—ideal for a live pitch,
-            not final security.
+            Mariners, sign into your account to access your uploaded documents
+            and to update existing uploads. For crewing and vessel staff, log in
+            to Office &amp; vessel to view crew members&apos; documents.
           </p>
         </div>
 
@@ -36,11 +35,10 @@ export default function Home() {
               Mariners
             </p>
             <h2 className="mt-3 text-xl font-semibold text-white">
-              Sign in & upload certs
+              View and Upload documents
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-slate-400">
-              Returning crew: same email shows every document you uploaded
-              before—add new scans without losing the old ones.
+              You can log in and update your documents here at any time.
             </p>
             <span className="mt-6 inline-flex text-sm font-medium text-cyan-300 group-hover:underline">
               Go to mariner portal →
@@ -55,11 +53,12 @@ export default function Home() {
               Office & vessel
             </p>
             <h2 className="mt-3 text-xl font-semibold text-white">
-              View all joiner scans
+              View and search crewmember documents
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-slate-400">
-              One shared password for shore and ship. Browse every mariner and
-              open PDFs or photos in the browser.
+              Admin account can edit permissions and entry templates. Other
+              accounts assigned by Admin can view their vessels&apos; crewmember
+              docs.
             </p>
             <span className="mt-6 inline-flex text-sm font-medium text-amber-200 group-hover:underline">
               Open viewer portal →
